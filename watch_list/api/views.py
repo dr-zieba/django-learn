@@ -2,8 +2,79 @@ from rest_framework.response import Response
 from rest_framework.decorators import api_view
 from rest_framework import status
 from rest_framework.views import APIView
-from ..models import WatchList, Platform
-from .serializers import WatchListSerializer, PlatformSerializer
+from rest_framework import generics, mixins, viewsets
+from django.shortcuts import get_object_or_404
+from rest_framework.exceptions import ValidationError
+from rest_framework.permissions import IsAuthenticated, IsAuthenticatedOrReadOnly
+
+from ..models import WatchList, Platform, Review
+from .serializers import WatchListSerializer, PlatformSerializer, ReviewSerializer
+from .permisions import AdminOrReadOnly, ReviewOwnerPermission
+
+
+class ReviewList(generics.ListAPIView):
+    permission_classes = [IsAuthenticated]
+    # queryset = Review.objects.all()
+    serializer_class = ReviewSerializer
+
+    def get_queryset(self):
+        pk = self.kwargs["pk"]
+        return Review.objects.filter(watchlist=pk)
+
+
+class ReviewDetail(generics.RetrieveUpdateDestroyAPIView):
+    permission_classes = [ReviewOwnerPermission]
+    queryset = Review.objects.all()
+    serializer_class = ReviewSerializer
+
+
+class ReviewCreate(generics.CreateAPIView):
+    serializer_class = ReviewSerializer
+
+    def get_queryset(self):
+        return Review.objects.all()
+
+    def perform_create(self, serializer):
+        pk = self.kwargs["pk"]
+        watchlist = WatchList.objects.get(pk=pk)
+
+        user = self.request.user
+        review = Review.objects.filter(user=user, watchlist=watchlist)
+        if review.exists():
+            raise ValidationError("Already reviewed")
+
+        if watchlist.number_of_rates == 0:
+            watchlist.number_of_rates += 1
+            watchlist.avg_rating = serializer.validated_data["rating"]
+        else:
+            watchlist.number_of_rates += 1
+            watchlist.avg_rating = (
+                watchlist.avg_rating
+                + serializer.validated_data["rating"] / watchlist.number_of_rates
+            )
+
+        watchlist.save()
+
+        serializer.save(watchlist=watchlist, user=user)
+
+
+# class ReviewList(mixins.ListModelMixin, mixins.CreateModelMixin, generics.GenericAPIView
+#                 ):
+#     queryset = Review.objects.all()
+#     serializer_class = ReviewSerializer
+#
+#     def get(self, request, *args, **kwargs):
+#         return self.list(request, *args, **kwargs)
+#
+#     def post(self, request, *args, **kwargs):
+#         return self.create(request, *args, **kwargs)
+#
+# class ReviewDetail(mixins.RetrieveModelMixin, generics.GenericAPIView):
+#     queryset = Review.objects.all()
+#     serializer_class = ReviewSerializer
+#
+#     def get(self, request, *args, **kwargs):
+#         return self.retrieve(request, *args, **kwargs)
 
 
 class WatchListAll(APIView):
@@ -52,15 +123,24 @@ class WatchListById(APIView):
             return Response({"error": "Not found"}, status=status.HTTP_400_BAD_REQUEST)
 
 
-class PlatformAll(APIView):
-    def get(self, request):
-        platform = Platform.objects.all()
-        serializer = PlatformSerializer(
-            platform, many=True, context={"request": request}
-        )
+# class PlatformAll1(viewsets.ModelViewSet):
+#     queryset = Platform.objects.all()
+#     serializer_class = PlatformSerializer
+
+
+class PlatformAll(viewsets.ViewSet):
+    def list(self, request):
+        queryset = Platform.objects.all()
+        serializer = PlatformSerializer(queryset, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
-    def post(self, request):
+    def retrieve(self, request, pk=None):
+        queryset = Platform.objects.all()
+        platform = get_object_or_404(queryset, pk=pk)
+        serilizer = PlatformSerializer(platform)
+        return Response(serilizer.data, status=status.HTTP_200_OK)
+
+    def create(self, request):
         serializer = PlatformSerializer(data=request.data)
         if serializer.is_valid():
             serializer.save()
@@ -68,38 +148,59 @@ class PlatformAll(APIView):
         else:
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-
-class PlatformById(APIView):
-    def get(self, request, pk):
-        platform = Platform.objects.get(pk=pk)
-        serializer = PlatformSerializer(platform, context={"request": request})
-        return Response(serializer.data, status=status.HTTP_200_OK)
-
-    def put(self, request, pk):
-        try:
-            platform = Platform.objects.get(pk=pk)
-        except Exception as e:
-            raise ValueError("Not found")
-        serializer = PlatformSerializer(platform, request.data)
-        if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data, status=status.HTTP_200_OK)
-        else:
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
     def delete(self, request, pk):
-        try:
-            platform = Platform.objects.get(pk=pk)
-        except Exception as e:
-            raise ValueError("Not found")
+        platform = Platform.objects.get(pk=pk)
+        platform.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
-        serializer = PlatformSerializer(platform, request.data)
-        if serializer.is_valid():
-            platform.delete()
-            return Response(status=status.HTTP_204_NO_CONTENT)
-        else:
-            return Response(status=status.HTTP_400_BAD_REQUEST)
 
+# class PlatformAll(APIView):
+#     def get(self, request):
+#         platform = Platform.objects.all()
+#         serializer = PlatformSerializer(
+#             platform, many=True, context={"request": request}
+#         )
+#         return Response(serializer.data, status=status.HTTP_200_OK)
+#
+#     def post(self, request):
+#         serializer = PlatformSerializer(data=request.data)
+#         if serializer.is_valid():
+#             serializer.save()
+#             return Response(serializer.data, status=status.HTTP_201_CREATED)
+#         else:
+#             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+# class PlatformById(APIView):
+#     def get(self, request, pk):
+#         platform = Platform.objects.get(pk=pk)
+#         serializer = PlatformSerializer(platform, context={"request": request})
+#         return Response(serializer.data, status=status.HTTP_200_OK)
+#
+#     def put(self, request, pk):
+#         try:
+#             platform = Platform.objects.get(pk=pk)
+#         except Exception as e:
+#             raise ValueError("Not found")
+#         serializer = PlatformSerializer(platform, request.data)
+#         if serializer.is_valid():
+#             serializer.save()
+#             return Response(serializer.data, status=status.HTTP_200_OK)
+#         else:
+#             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+#
+#     def delete(self, request, pk):
+#         try:
+#             platform = Platform.objects.get(pk=pk)
+#         except Exception as e:
+#             raise ValueError("Not found")
+#
+#         serializer = PlatformSerializer(platform, request.data)
+#         if serializer.is_valid():
+#             platform.delete()
+#             return Response(status=status.HTTP_204_NO_CONTENT)
+#         else:
+#             return Response(status=status.HTTP_400_BAD_REQUEST)
 
 #
 # @api_view(["GET", "POST"])

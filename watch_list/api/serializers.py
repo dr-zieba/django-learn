@@ -2,16 +2,19 @@ from rest_framework import serializers
 from ..models import WatchList, Platform, Review
 
 
-class ReviewSerialiser(serializers.ModelSerializer):
+class ReviewSerializer(serializers.ModelSerializer):
+    user = serializers.StringRelatedField(read_only=True)
+
     class Meta:
         model = Review
-        fields = "__all__"
+        # fields = "__all__"
+        exclude = ("watchlist",)
 
 
-class WatchListSerializer(serializers.HyperlinkedModelSerializer):
+class WatchListSerializer(serializers.ModelSerializer):
     # len_name = serializers.SerializerMethodField()
     platform_name = serializers.ReadOnlyField(source="platform.name")
-    watchlist_review = ReviewSerialiser(many=True, read_only=True)
+    watchlist_review = ReviewSerializer(many=True, read_only=True)
 
     class Meta:
         model = WatchList
@@ -32,7 +35,7 @@ class WatchListSerializer(serializers.HyperlinkedModelSerializer):
         return value
 
 
-class PlatformSerializer(serializers.HyperlinkedModelSerializer):
+class PlatformSerializer(serializers.ModelSerializer):
     watchlist_platform = WatchListSerializer(many=True, read_only=True)
 
     class Meta:
