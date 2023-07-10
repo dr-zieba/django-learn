@@ -9,11 +9,33 @@ from rest_framework.permissions import IsAuthenticated, IsAuthenticatedOrReadOnl
 
 from ..models import WatchList, Platform, Review
 from .serializers import WatchListSerializer, PlatformSerializer, ReviewSerializer
-from .permisions import AdminOrReadOnly, ReviewOwnerPermission
+from .permisions import IsAdminOrReadOnly, IsReviewOwnerPermission
+from .pagination import WatchListPagination
+from rest_framework.throttling import UserRateThrottle
+
+
+class UserReview(generics.ListAPIView):
+    serializer_class = ReviewSerializer
+    # permission_classes = [IsAuthenticated]
+
+    # def get_queryset(self):
+    #     user = self.kwargs['username']
+    #     return Review.objects.filter(user__username=user)
+    def get_queryset(self):
+        """
+        Optionally restricts the returned purchases to a given user,
+        by filtering against a `username` query parameter in the URL.
+        """
+        queryset = Review.objects.all()
+        username = self.request.query_params.get("username")
+        if username is not None:
+            queryset = queryset.filter(user__username=username)
+        return queryset
 
 
 class ReviewList(generics.ListAPIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsReviewOwnerPermission]
+    throttle_classes = [UserRateThrottle]
     # queryset = Review.objects.all()
     serializer_class = ReviewSerializer
 
@@ -23,13 +45,14 @@ class ReviewList(generics.ListAPIView):
 
 
 class ReviewDetail(generics.RetrieveUpdateDestroyAPIView):
-    permission_classes = [ReviewOwnerPermission]
+    permission_classes = [IsReviewOwnerPermission]
     queryset = Review.objects.all()
     serializer_class = ReviewSerializer
 
 
 class ReviewCreate(generics.CreateAPIView):
     serializer_class = ReviewSerializer
+    permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
         return Review.objects.all()
@@ -77,24 +100,36 @@ class ReviewCreate(generics.CreateAPIView):
 #         return self.retrieve(request, *args, **kwargs)
 
 
-class WatchListAll(APIView):
-    def get(self, request):
-        movies = WatchList.objects.all()
-        serializer = WatchListSerializer(
-            movies, many=True, context={"request": request}
-        )
-        return Response(serializer.data, status=status.HTTP_200_OK)
+class WatchListAll(generics.ListAPIView):
+    queryset = WatchList.objects.all()
+    serializer_class = WatchListSerializer
+    permission_classes = [IsAdminOrReadOnly]
+    pagination_class = WatchListPagination
 
-    def post(self, request):
-        serializer = WatchListSerializer(data=request.data)
-        if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        else:
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+# class WatchListAll(APIView):
+#     permission_classes = [IsAdminOrReadOnly]
+#     pagination_class = WatchListPagination
+#
+#     def get(self, request):
+#         movies = WatchList.objects.all()
+#         serializer = WatchListSerializer(
+#             movies, many=True, context={"request": request}
+#         )
+#         return Response(serializer.data, status=status.HTTP_200_OK)
+#
+#     def post(self, request):
+#         serializer = WatchListSerializer(data=request.data)
+#         if serializer.is_valid():
+#             serializer.save()
+#             return Response(serializer.data, status=status.HTTP_201_CREATED)
+#         else:
+#             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 class WatchListById(APIView):
+    permission_classes = [IsAdminOrReadOnly]
+
     def get(self, request, pk):
         try:
             movie = WatchList.objects.get(pk=pk)
@@ -129,6 +164,8 @@ class WatchListById(APIView):
 
 
 class PlatformAll(viewsets.ViewSet):
+    permission_classes = [IsAdminOrReadOnly]
+
     def list(self, request):
         queryset = Platform.objects.all()
         serializer = PlatformSerializer(queryset, many=True)
