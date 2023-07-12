@@ -13,7 +13,7 @@ from .views import (
 )
 
 router = DefaultRouter()
-router.register("platform", PlatformAll, basename="platform-all")
+router.register("platform", PlatformAll, basename="platform")
 
 urlpatterns = [
     path("watchlist/", WatchListAll.as_view(), name="watchlist"),

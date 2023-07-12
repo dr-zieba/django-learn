@@ -22,8 +22,8 @@ class Registration(APIView):
 
             # Token returned after registration
             # Used with Token auth
-            token = Token.objects.get(user=account)
-            data["token"] = token.key
+            token = Token.objects.get(user=account).key
+            data["token"] = token
 
             # Used with JWT auth
             # refresh = RefreshToken.for_user(account)
