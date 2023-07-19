@@ -16,7 +16,7 @@ router = DefaultRouter()
 router.register("platform", PlatformAll, basename="platform")
 
 urlpatterns = [
-    path("watchlist/", WatchListAll.as_view(), name="watchlist"),
+    path("watchlist/", WatchListAll.as_view(), name="watchlist-list"),
     path("<int:pk>", WatchListById.as_view(), name="watchlist-detail"),
     path("", include(router.urls)),
     # path("platform/", PlatformAll.as_view(), name="platform-all"),

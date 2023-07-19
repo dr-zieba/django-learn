@@ -100,7 +100,7 @@ class ReviewCreate(generics.CreateAPIView):
 #         return self.retrieve(request, *args, **kwargs)
 
 
-class WatchListAll(generics.ListAPIView):
+class WatchListAll(generics.ListCreateAPIView):
     queryset = WatchList.objects.all()
     serializer_class = WatchListSerializer
     permission_classes = [IsAdminOrReadOnly]
